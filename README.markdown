@@ -4,6 +4,10 @@ Maximally Minimal Streams
 
 A `strm` is a function.
 
+## Stability
+
+Experimental: Expect the unexpected. Please provide feedback on api and your use-case.
+
 ## Minimal Valid STRM
 
 ``` js
