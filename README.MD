@@ -24,34 +24,7 @@ strm('hello')
 bs('5 streams!')
 ```
 
-based on functions,
-
-``` js
-
-var create = require('simple')
-
-//simple streams are just functions. 
-//to PIPE pass the stream a function
-
-var s = create()
-
-s(console.log)
-
-//TO WRITE, call the stream with an arg.
-
-s(null, 'DATA')
-
-//to end the stream, call the streams with null args
-
-s(null, null)
-
-//writing will now throw.
-try {
-  s(null, 'DATA2')
-} catch (err) {
-  err
-}
-```
+##NOTES
 
 what do simple streams need to be able to do?
 
@@ -62,8 +35,10 @@ what do simple streams need to be able to do?
 * destroy a stream (pass it an error)
 * disconnect streams
 
-* interface with pull streams.
+* interface with pull streams?
 
+
+``` js
 stream(function (err, data) {
   //data is read.
   stream(function more data) {
@@ -72,7 +47,6 @@ stream(function (err, data) {
     stream(null) //END the stream
   })
 })
-```
 
 var stream = {
   write: function (data) { this.readers.forEach(data) {
@@ -87,3 +61,5 @@ var stream = {
   }),
   readers: []
 }
+```
+
