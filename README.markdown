@@ -88,11 +88,11 @@ var map = exports.map = function (map) {
 }
 ```
 
-there are a lot of things Grown-Up streams need to do,
-like back-pressure, and buffering, that this stream doesn't do.
+there are a lot of things Grown-Up streams need, but
+this stream doesn't do. Things like back-pressure, and buffering.
 
-Hovewer! it doesn't prevent other streams in the pipeline from
-doing these things!
+Hovewer! this stream may be dumb, but it doesn't prevent smarter
+streams from doing those things!
 
 ## Back Pressure
 
@@ -100,7 +100,8 @@ Sometimes a resource tells needs to tell you to slow down.
 People do this by putting a confused look on their face,
 but `strm` does this by returning an array.
 
-callback when a `strm` ends, but only accept one element per tick.
+Callback when a `strm` ends, but only accept one element per tick.
+
 ``` js
 var write = exports.write = function (done) {
   var waiting = [], paused = false, array = []
@@ -124,13 +125,13 @@ var write = exports.write = function (done) {
 }
 ```
 
->Notice that the map stream (and the noop stream) return the `dest(data)`
->this means the array will propagate back up the pipe line until someone
->can handle that.
+>Notice that the map stream (and the noop stream) have `return dest(data)`
+>this means the array will propagate back up the pipeline until someone
+>can handle the back-pressure.
 
 here is an `strm` that can pause.
 
-It reads array, and waits until the destination has drained.
+`read` an array, and waits until the destination has drained.
 
 ``` js
 var read = exports.read = function (array) {
@@ -157,6 +158,8 @@ var read = exports.read = function (array) {
   }
 }
 ```
+
+This is just a few basic examples, more to come!
 
 ##NOTES
 
