@@ -21,7 +21,7 @@ var as = strm()
 as(console.log)
 
 //call it to write data
-strm('hello')
+as('hello') // ==> 'hello undefined'
 
 ```
 this is what the code looks like:
@@ -53,10 +53,10 @@ also, there is an `op` argument.
 
 bs('5 streams!')
 /* ==>
-1 '3 streams!'
-2 '3 streams!'
-3 '3 streams!'
-3 streams! undefined
+1 '5 streams!'
+2 '5 streams!'
+3 '5 streams!'
+5 streams! undefined
 */
 ```
 
