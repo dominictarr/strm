@@ -2,11 +2,13 @@
 var next = process.nextTick
 
 //a valid strm that does nothing.
-var noop = exports = module.exports = function () {
+var id = function (e) { return e }
+var noop = exports = module.exports = function (op) {
   var dest
   return function (data, end) {
     if('function' == typeof data)
       return dest = data
+    op && op(data)
     return dest(data, end)
   }
 }
@@ -15,7 +17,6 @@ var noop = exports = module.exports = function () {
 //this still allows backpressuse, and buffering
 //but depends on smarter endpoints.
 
-var id = function (e) { return e }
 var map = exports.map = function (map) {
   var dest
   map = map || id
@@ -77,6 +78,7 @@ var write = exports.write = function (done) {
       return done(end === true ? null : end, array)
   }
 }
+
 //detach a stream after a test triggers
 var detach = exports.detach = function (test) {
   var dest

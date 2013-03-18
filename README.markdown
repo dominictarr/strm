@@ -19,22 +19,41 @@ as(console.log)
 //call it to write data
 strm('hello')
 
-//piping returns the destination,
-//os, can connect many streams left to right.
-;(bs = strm()) (strm()) (strm()) (strm()) (console.log)
-
-bs('5 streams!')
 ```
 this is what the code looks like:
 ``` js
-var noop = exports = module.exports = function () {
+var noop = exports = module.exports = function (op) {
   var dest
   return function (data, end) {
     if('function' == typeof data)
       return dest = data
+    op && op(data)
     return dest(data, end)
   }
 }
+```
+
+notice that the `dest` is returned when piping,
+also, there is an `op` argument.
+
+``` js
+
+
+//piping returns the destination,
+//os, can connect many streams left to right.
+;(bs = 
+   strm( console.log.bind(console, 1) ))
+  (strm( console.log.bind(console, 2) ))
+  (strm( console.log.bind(console, 3) ))
+  (console.log)
+
+bs('5 streams!')
+/* ==>
+1 '3 streams!'
+2 '3 streams!'
+3 '3 streams!'
+3 streams! undefined
+*/
 ```
 
 ## Something A Little More Interesting (and useful)
