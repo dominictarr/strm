@@ -125,6 +125,12 @@ var reader = exports.reader = function (reader) {
   }
 }
 
+var async = exports.async = function (strm, data, end, cb) {
+  var r = strm(data, end)
+  if(r && 'function' === typeof r.push)
+    return r.push(cb), null
+  return cb(), r
+}
 
 var depthFirst = exports.depthFirst = function (start, createStrm) {
   //CHANGE NOOP FOR SOMETHING THAT WILL PROPAGATE BACK PRESSURE
@@ -138,7 +144,9 @@ var depthFirst = exports.depthFirst = function (start, createStrm) {
         ;(function next () {
           read(function (err, data) {
             if(data)
-              s(data), children(data, next)
+              async(s, data, null, function () {
+                children(data, next)
+              })
             else {
               done()
             }
@@ -158,14 +166,18 @@ var widthFirst = exports.widthFirst = function (start, createStrm) {
   ;(function children (start, done) {
 
     createStrm(start)
-      (function (data, end) {
-        if(data)
-          l.push(data), s(data)
-        else if(l.length)
-          children(l.shift())
-        else
-          s(null, true)
-      })
+      (reader(function (read) {
+        ;(function next () {
+          read(function (end, data) {
+            if(data)
+              l.push(data), async(s, data, null, next)
+            else if(l.length)
+              children(l.shift())
+            else
+              s(null, true)
+          })
+        })()
+      }))
 
   })(start)
 
@@ -184,8 +196,7 @@ var leafFirst = exports.leafFirst = function (start, createStrm) {
             if(data)
               children(data, next)
             else {
-              s(start)
-              done()
+              async(s, start, null, done)
             }
           })
         })()
@@ -195,7 +206,6 @@ var leafFirst = exports.leafFirst = function (start, createStrm) {
     s(null, true)
   })
   return s
-
 }
 
 //this is a little bit large...
