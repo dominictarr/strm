@@ -95,6 +95,109 @@ var detach = exports.detach = function (test) {
   }
 }
 
+var reader = exports.reader = function (reader) {
+  var input = [], next = [], dest, waiting = [], ended
+
+  function drain () {
+    if(next.length && (input.length || ended)) {
+      next.shift()(ended, input.shift())
+      if(!input.length && waiting.length)
+        waiting.shift()()
+    }
+  }
+
+  reader(function (cb) {
+    next.push(cb); drain()
+  }, function (data, end) {
+    dest(data, end)
+  })
+
+  return function (data, end) {
+    if('function' === typeof data)
+      return dest = data
+
+    ended = ended || end
+    if(data) input.push(data)
+
+    drain()
+
+    return input.length ? waiting : true
+  }
+}
+
+
+var depthFirst = exports.depthFirst = function (start, createStrm) {
+  //CHANGE NOOP FOR SOMETHING THAT WILL PROPAGATE BACK PRESSURE
+  //SO CAN LAZILY TRAVERSE, AND STOP EARLY.
+  //write(s, function (ended) {...})
+  var s = noop()
+  ;(function children (start, done) {
+
+    createStrm(start)
+      (reader(function (read) {
+        ;(function next () {
+          read(function (err, data) {
+            if(data)
+              s(data), children(data, next)
+            else {
+              done()
+            }
+          })
+        })()
+      }))
+
+  })(start, function () {
+    s(null, true)
+  })
+  return s
+}
+
+var widthFirst = exports.widthFirst = function (start, createStrm) {
+  var s = noop(), l = []
+
+  ;(function children (start, done) {
+
+    createStrm(start)
+      (function (data, end) {
+        if(data)
+          l.push(data), s(data)
+        else if(l.length)
+          children(l.shift())
+        else
+          s(null, true)
+      })
+
+  })(start)
+
+  return s
+}
+
+var leafFirst = exports.leafFirst = function (start, createStrm) {
+
+  var s = noop()
+  ;(function children (start, done) {
+
+    createStrm(start)
+      (reader(function (read) {
+        ;(function next () {
+          read(function (err, data) {
+            if(data)
+              children(data, next)
+            else {
+              s(start)
+              done()
+            }
+          })
+        })()
+      }))
+
+  })(start, function () {
+    s(null, true)
+  })
+  return s
+
+}
+
 //this is a little bit large...
 //maybe there is a simpler way to implement this idea?
 //or a simpler idea that works better
@@ -135,3 +238,57 @@ var asyncMap = exports.asyncMap = function (map) {
   }
 }
 
+function buffer (onWrite, onRead) {
+  var buffer = []
+  buffer.write = buffer.push = function (data) {
+    console.log('write', data)
+    ;[].push.call(buffer, data)
+    if(onWrite) onWrite.call(buffer, data)
+  }
+  buffer.read = buffer.shift = function () {
+    var data = [].shift.call(buffer)
+    console.log('read', data)
+    if(onRead) onRead.call(buffer, data)
+    return data
+  }
+  return buffer
+}
+
+//read buffer. rather like a streams2
+
+//what if the interface between streams is just arrays?
+//there is a buffer between two streams,
+//that once side pushes into and the other side pulls from
+//what if the read function is just called whenever
+//the other destination side is low, unless the input is also low
+//[1, 2, 3] ... []        //read
+//[]        ... [1, 2, 3] //don't read
+//[1, 2, 3] ... [4, 5, 6] //don't read
+//[]        ... []        //don't read
+
+//and there is NO waiting array.
+
+var readable = exports.readable = function (reader) {
+  var input = [], output = [], waiting = [], paused = false, ended
+
+  var output = buffer(function () {
+    next(function () {
+      dest(output, ended) 
+    })
+  }, function () {
+    if(!output.length && input.length)
+      reader.call(output, input, ended)
+  })
+
+  return function (data, end) {
+    if('function' === typeof data) {
+      dest = data
+      return dest
+    }
+    if(data) input = data
+    ended = ended || end
+
+    if(!output.length)
+      reader.call(output, input, ended)
+  }
+}
