@@ -1,4 +1,3 @@
-
 var next = process.nextTick
 
 //a valid strm that does nothing.
@@ -18,17 +17,29 @@ var noop = exports = module.exports = function (op) {
 //but depends on smarter endpoints.
 
 var map = exports.map = function (map) {
-  var dest
-  map = map || id
+  var dest; map = map || id
   return function (data, end) {
     if('function' == typeof data)
       return dest = data
 
     if(end) return dest(null, end)
 
-    var m = data && map(data)
-    return m ? dest(m) : true
+    var m = data ? map(data) : null
+    return m == null ? dest(m) : true
   }
+}
+
+var filter = exports.filter = function (test) {
+  return map(function (data) {
+    return test(data) ? data : null
+  })
+}
+
+var async = exports.async = function (strm, data, end, cb) {
+  var r = strm(data, end)
+  if(r && 'function' === typeof r.push)
+    return r.push(cb), null
+  return cb(r === false ? true : end), r
 }
 
 //a read array method, that will pause when dest 
@@ -40,15 +51,13 @@ var read = exports.read = function (array) {
     if(dest) {
       var i = 0
 
-      next(function read () {
-        while(i < array.length) {
+      next(function _next (end) {
+        if(end) return
+        while(i <= array.length) {
           var r = dest(array[i++])
-          if(r && 'function' === typeof r.push)
-            return r.push(read)
-          if(r === false)
-            return dest = null
+          if(r && r.push) return r.push(_next)
+          if(r === false) return
         }
-        //the array has ended
         dest(null, true)
       })
 
@@ -74,7 +83,7 @@ var write = exports.write = function (done) {
 
     if(data)
       return array.push(data), waiting
-    if(end != null)
+    if(end && !data)
       return done(end === true ? null : end, array)
   }
 }
@@ -86,13 +95,26 @@ var detach = exports.detach = function (test) {
     if('function' == typeof data)
       return dest = data
 
-    if(end) return dest(null, end)
+    if(!dest) return false
 
+    if(end) return dest(null, end)
     if(!test(data)) return dest(data)
+
     dest(null, true)
     dest = null
     return false
   }
+}
+
+var take = exports.take = function (test) {
+  if('function' === typeof test)
+    return detach(function (data) {
+      return !test(data)
+    })
+  if('number' === typeof test)
+    return detach(function () {
+      return !test--
+    })
 }
 
 var reader = exports.reader = function (reader) {
@@ -100,21 +122,22 @@ var reader = exports.reader = function (reader) {
 
   function drain (end) {
     ended = ended || end
-    if(ready)
+    if(ready) {
       if(input.length || ended) {
         ready = false
         reader(input.shift(), ended, function (end) {
           ready = true
-          drain()
+          drain(end)
         })
       }
       else if(waiting.length)
         waiting.shift()()
+    }
   }
 
   return function (data, end) {
     if('function' === typeof data)
-      return dest = data
+      throw new Error('write-only')
 
     ended = ended || end
     if(data) input.push(data)
@@ -125,17 +148,7 @@ var reader = exports.reader = function (reader) {
   }
 }
 
-var async = exports.async = function (strm, data, end, cb) {
-  var r = strm(data, end)
-  if(r && 'function' === typeof r.push)
-    return r.push(cb), null
-  return cb(), r
-}
-
 var depthFirst = exports.depthFirst = function (start, createStrm) {
-  //CHANGE NOOP FOR SOMETHING THAT WILL PROPAGATE BACK PRESSURE
-  //SO CAN LAZILY TRAVERSE, AND STOP EARLY.
-  //write(s, function (ended) {...})
   var s = noop()
   ;(function children (start, done) {
     createStrm(start)
@@ -195,97 +208,23 @@ var leafFirst = exports.leafFirst = function (start, createStrm) {
   return s
 }
 
-//this is a little bit large...
-//maybe there is a simpler way to implement this idea?
-//or a simpler idea that works better
-var asyncMap = exports.asyncMap = function (map) {
-  var waiting = [], paused = false, buffer = [], ended
+var duplex = exports.duple = function (writable, readable) {
   return function (data, end) {
-    if(ended) return ended
     if('function' === typeof data)
-      return dest = data
-    ended = ended || end
-    !ended && buffer.push(data)
-    if(paused) return waiting
-    ;(function read () {
-      paused = true
-      if(buffer.length) {
-        map(buffer.shift(), function (err, data) {
-          if(err)
-            return dest(null, ended = err)
-          var r = dest(data)
-          if(r && 'function' === typeof r.push) {
-            paused = true
-            r.push(read)
-          }
-          else {
-            paused = false
-            read()
-          }
-        })
-      }
-      else if(ended) 
-        return dest(null, ended)
-      else if(waiting.length) {
-        return paused = false, waiting.shift()()
-      }
-      return waiting
-    })()
-    return waiting
+      return readable(data)
+    return writable(data, end)
   }
 }
 
-function buffer (onWrite, onRead) {
-  var buffer = []
-  buffer.write = buffer.push = function (data) {
-    console.log('write', data)
-    ;[].push.call(buffer, data)
-    if(onWrite) onWrite.call(buffer, data)
-  }
-  buffer.read = buffer.shift = function () {
-    var data = [].shift.call(buffer)
-    console.log('read', data)
-    if(onRead) onRead.call(buffer, data)
-    return data
-  }
-  return buffer
-}
-
-//read buffer. rather like a streams2
-
-//what if the interface between streams is just arrays?
-//there is a buffer between two streams,
-//that once side pushes into and the other side pulls from
-//what if the read function is just called whenever
-//the other destination side is low, unless the input is also low
-//[1, 2, 3] ... []        //read
-//[]        ... [1, 2, 3] //don't read
-//[1, 2, 3] ... [4, 5, 6] //don't read
-//[]        ... []        //don't read
-
-//and there is NO waiting array.
-
-var readable = exports.readable = function (reader) {
-  var input = [], output = [], waiting = [], paused = false, ended
-
-  var output = buffer(function () {
-    next(function () {
-      dest(output, ended) 
-    })
-  }, function () {
-    if(!output.length && input.length)
-      reader.call(output, input, ended)
+var asyncMap = exports.asyncMap = function (map) {
+  var readable = noop()
+  var writable = reader(function (data, end, cb) {
+    if(!end || data)
+      map(data, function (err, data) {
+        async(readable, data, err, cb)
+      })
   })
-
-  return function (data, end) {
-    if('function' === typeof data) {
-      dest = data
-      return dest
-    }
-    if(data) input = data
-    ended = ended || end
-
-    if(!output.length)
-      reader.call(output, input, ended)
-  }
+  return duplex (writable, readable)
 }
+
+
