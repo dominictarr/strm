@@ -53,7 +53,7 @@ var read = exports.read = function (array) {
 
       next(function _next (end) {
         if(end) return
-        while(i <= array.length) {
+        while(i < array.length) {
           var r = dest(array[i++])
           if(r && r.push) return r.push(_next)
           if(r === false) return
@@ -145,6 +145,29 @@ var reader = exports.reader = function (reader) {
     drain()
 
     return input.length ? waiting : true
+  }
+}
+
+var reader2 = exports.reader2 = function(s) {
+  var input = [], waiting = [], reading = [], ended
+  s(function (data, end) {
+    if(data == null && end == null)
+      throw new Error('data == end == null')
+    ended = ended || end
+    if(data) input.push(data)
+    while(input.length && reading.length)
+      reading.shift()(ended, input.shift())
+
+//    console.log('writing', input.length, reading.length, waiting.length, input[0], end)
+    return input.length ? waiting : true
+  })
+
+  return function (cb) {
+    reading.push(cb)
+    while(input.length && reading.length)
+      reading.shift()(ended, input.shift())
+    if(waiting.length)
+      waiting.shift()(ended)
   }
 }
 
