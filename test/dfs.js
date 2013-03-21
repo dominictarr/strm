@@ -3,7 +3,7 @@ var strm = require('../')
 var fs = require('fs')
 var path = require('path')
 
-strm.depthFirst(process.cwd(), function (dir) {
+strm.leafFirst(process.cwd(), function (dir) {
   var s = strm()
   fs.readdir(dir, function (err, ls) {
     ls = (ls || []).map(function (file) {
