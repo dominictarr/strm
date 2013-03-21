@@ -3,7 +3,9 @@ var strm = require('../')
 var fs = require('fs')
 var path = require('path')
 
-strm.leafFirst(process.cwd(), function (dir) {
+
+
+strm.depthFirst(process.cwd(), function (dir) {
   var s = strm()
   fs.readdir(dir, function (err, ls) {
     ls = (ls || []).map(function (file) {
@@ -14,6 +16,11 @@ strm.leafFirst(process.cwd(), function (dir) {
   })
   return s
 })
-(console.log)
+ (strm.asyncMap(function (data, cb) {
+    setTimeout(function () {
+      cb(null, data.toUpperCase())
+    })
+  }))
+  (console.log)
 
 
