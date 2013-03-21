@@ -96,21 +96,21 @@ var detach = exports.detach = function (test) {
 }
 
 var reader = exports.reader = function (reader) {
-  var input = [], next = [], dest, waiting = [], ended
+  var input = [], next = 1, dest, waiting = [], ended, ready = true
 
-  function drain () {
-    if(next.length && (input.length || ended)) {
-      next.shift()(ended, input.shift())
-      if(!input.length && waiting.length)
+  function drain (end) {
+    ended = ended || end
+    if(ready)
+      if(input.length || ended) {
+        ready = false
+        reader(input.shift(), ended, function (end) {
+          ready = true
+          drain()
+        })
+      }
+      else if(waiting.length)
         waiting.shift()()
-    }
   }
-
-  reader(function (cb) {
-    next.push(cb); drain()
-  }, function (data, end) {
-    dest(data, end)
-  })
 
   return function (data, end) {
     if('function' === typeof data)
@@ -138,20 +138,15 @@ var depthFirst = exports.depthFirst = function (start, createStrm) {
   //write(s, function (ended) {...})
   var s = noop()
   ;(function children (start, done) {
-
     createStrm(start)
-      (reader(function (read) {
-        ;(function next () {
-          read(function (err, data) {
-            if(data)
-              async(s, data, null, function () {
-                children(data, next)
-              })
-            else {
-              done()
-            }
+      (reader(function (data, err, next) {
+        if(data)
+          async(s, data, null, function () {
+            children(data, next)
           })
-        })()
+        else {
+          done()
+        }
       }))
 
   })(start, function () {
@@ -166,17 +161,13 @@ var widthFirst = exports.widthFirst = function (start, createStrm) {
   ;(function children (start, done) {
 
     createStrm(start)
-      (reader(function (read) {
-        ;(function next () {
-          read(function (end, data) {
-            if(data)
-              l.push(data), async(s, data, null, next)
-            else if(l.length)
-              children(l.shift())
-            else
-              s(null, true)
-          })
-        })()
+      (reader(function (data, end, next) {
+        if(data)
+          l.push(data), async(s, data, null, next)
+        else if(l.length)
+          children(l.shift())
+        else
+          s(null, true)
       }))
 
   })(start)
@@ -190,16 +181,12 @@ var leafFirst = exports.leafFirst = function (start, createStrm) {
   ;(function children (start, done) {
 
     createStrm(start)
-      (reader(function (read) {
-        ;(function next () {
-          read(function (err, data) {
-            if(data)
-              children(data, next)
-            else {
-              async(s, start, null, done)
-            }
-          })
-        })()
+      (reader(function (data, end, next) {
+        if(data)
+          children(data, next)
+        else {
+          async(s, start, null, done)
+        }
       }))
 
   })(start, function () {
